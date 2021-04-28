@@ -5,3 +5,51 @@ Some of the OpenLDAP componenets consist of:
 the ldap daemon 
 -ldapsearch, ldapadd, ldapdelete
 
+
+
+Step 1
+-install the dependencies and tools for openLDAP
+$ yum install cyrus-sasl-devel make libtool autoconf libtool-ltdl-devel openssl-devel libdb-devel tar gcc perl perl-devel wget vim
+
+*If running openLDAP as a non-privileged user:
+$ useradd -r -M -d /var/lib/openldap -u 55 -s /usr/sbin/nologin ldap
+
+Step 2
+-download openLDAP from their website
+$ wget ftp://<full URL> /openldap-$VER.tgz
+
+-extract the tarball:
+$ tar xzf openldap-$VER.tgz
+
+Step 3
+-run the ./configure script to ensure you have all the dependencies for installing openLDAP:
+$ cd openldap-$VER
+
+$ ./configure --prefix=/usr --sysconfdir=/etc --disable-static \
+--enable-debug --with-tls=openssl --with-cyrus-sasl --enable-dynamic \
+--enable-crypt --enable-spasswd --enable-slapd --enable-modules \
+--enable-rlookups --enable-backends=mod --disable-ndb --disable-sql \
+--disable-shell --disable-bdb --disable-hdb --enable-overlays=mod
+
+*You should see this message if the script completes successfully:
+Please run "make depend" to build dependencies
+
+$ make depend
+-compile openLDAP
+$ make 
+
+Step 4
+-install openLDAP
+$ make install
+-to check
+$ ls /etc/openldap/
+-you should see:
+certs  ldap.conf  ldap.conf.default  schema  slapd.conf  slapd.conf.default  slapd.ldif  slapd.ldif.default
+
+
+
+Step 5 
+-configuring openLDAP
+
+
+
