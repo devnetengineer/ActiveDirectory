@@ -49,7 +49,403 @@ certs  ldap.conf  ldap.conf.default  schema  slapd.conf  slapd.conf.default  sla
 
 
 Step 5 
--configuring openLDAP
+-create openLDAP data and database dir
+mkdir /var/lib/openldap /etc/openldap/slapd.d
+
+-set the proper permissions
+chown -R ldap:ldap /var/lib/openldap
+chown root:ldap /etc/openldap/slapd.conf
+chmod 640 /etc/openldap/slapd.conf
+
+Step 6
+-create a systemd file to run openLDAP as a service:
+
+vim /etc/systemd/system/slapd.service
+
+**
+[Unit]
+Description=OpenLDAP Server Daemon
+After=syslog.target network-online.target
+Documentation=man:slapd
+Documentation=man:slapd-mdb
+
+[Service]
+Type=forking
+PIDFile=/var/lib/openldap/slapd.pid
+Environment="SLAPD_URLS=ldap:/// ldapi:/// ldaps:///"
+Environment="SLAPD_OPTIONS=-F /etc/openldap/slapd.d"
+ExecStart=/usr/libexec/slapd -u ldap -g ldap -h ${SLAPD_URLS} $SLAPD_OPTIONS
+
+[Install]
+WantedBy=multi-user.target
+**
+Step 7
+-check if your "sudo" supports LDAP
+sudo -V |  grep -i "ldap"
+
+You should see the following:
+
+...
+ldap.conf path: /etc/sudo-ldap.conf
+ldap.secret path: /etc/ldap.secret
+
+-Check if LDAP sudo schema is available
+$ rpm -ql sudo |  grep -i schema.openldap
+
+/usr/share/doc/sudo/schema.OpenLDAP
+
+-Copy the schema.OpenLDAP to the schema directory.
+
+cp /usr/share/doc/sudo/schema.OpenLDAP  /etc/openldap/schema/sudo.schema
+
+-Next, you need to create sudo schema ldif file. Run the command below to create the sudo.ldif file. This ldif file is obtained from Lullabot github repository.
+
+cat << 'EOL' > /etc/openldap/schema/sudo.ldif
+dn: cn=sudo,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: sudo
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.1 NAME 'sudoUser' DESC 'User(s) who may  run sudo' EQUALITY caseExactIA5Match SUBSTR caseExactIA5SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.2 NAME 'sudoHost' DESC 'Host(s) who may run sudo' EQUALITY caseExactIA5Match SUBSTR caseExactIA5SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.3 NAME 'sudoCommand' DESC 'Command(s) to be executed by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.4 NAME 'sudoRunAs' DESC 'User(s) impersonated by sudo (deprecated)' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.5 NAME 'sudoOption' DESC 'Options(s) followed by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.6 NAME 'sudoRunAsUser' DESC 'User(s) impersonated by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.7 NAME 'sudoRunAsGroup' DESC 'Group(s) impersonated by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcObjectClasses: ( 1.3.6.1.4.1.15953.9.2.1 NAME 'sudoRole' SUP top STRUCTURAL DESC 'Sudoer Entries' MUST ( cn ) MAY ( sudoUser $ sudoHost $ sudoCommand $ sudoRunAs $ sudoRunAsUser $ sudoRunAsGroup $ sudoOption $ description ) )
+EOL
+
+Step 8
+##An LDIF file is a standard plain text data interchange format for representing LDAP (Lightweight Directory Access Protocol) directory content and update requests. LDIF conveys directory content as a set of records, one record for each object (or entry).##
+
+Edit the SLAPD LDIF file, /etc/openldap/slapd.ldif, and update it as follows;
+
+mv /etc/openldap/slapd.ldif /etc/openldap/slapd.ldif.bak
+
+vi /etc/openldap/slapd.ldif
+
+**
+dn: cn=config
+objectClass: olcGlobal
+cn: config
+olcArgsFile: /var/lib/openldap/slapd.args
+olcPidFile: /var/lib/openldap/slapd.pid
+
+dn: cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: schema
+
+dn: cn=module,cn=config
+objectClass: olcModuleList
+cn: module
+olcModulepath: /usr/libexec/openldap
+olcModuleload: back_mdb.la
+
+include: file:///etc/openldap/schema/core.ldif
+include: file:///etc/openldap/schema/cosine.ldif
+include: file:///etc/openldap/schema/nis.ldif
+include: file:///etc/openldap/schema/inetorgperson.ldif
+include: file:///etc/openldap/schema/ppolicy.ldif
+include: file:///etc/openldap/schema/sudo.ldif
+
+dn: olcDatabase=frontend,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcFrontendConfig
+olcDatabase: frontend
+olcAccess: to dn.base="cn=Subschema" by * read
+olcAccess: to * 
+  by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage 
+  by * none
+
+dn: olcDatabase=config,cn=config
+objectClass: olcDatabaseConfig
+olcDatabase: config
+olcRootDN: cn=config
+olcAccess: to * 
+  by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage 
+  by * none
+**
+    -To update the SLAPD database from the information provided on the SLAPD LDIF file above, use slapadd command with the option -n 0 which creates the first database.
+    -To specify the configuration directory, /etc/openldap/slapd.d, use option -F and option -l to specify location of the LDIF file above.
+
+-Before you can write the changes to the database, perform a dry run to see what would happen. Pass -u option to slapadd command.
+
+slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif -u
+
+If the command above executes with no error, implement the changes.
+
+slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif
+
+This command creates slapd database configurations under /etc/openldap/slapd.d directory.
+
+ls /etc/openldap/slapd.d
+
+'cn=config'  'cn=config.ldif'
+
+Set the user and group ownership of the /etc/openldap/slapd.d directory and the files in it to ldap user.
+
+chown -R ldap:ldap /etc/openldap/slapd.d
+
+
+
+
+Step 9
+-run SLAPD service:
+systemctl daemon-reload
+
+systemctl enable --now slapd
+
+Check the status;
+
+systemctl status slapd
+
+● slapd.service - OpenLDAP Server Daemon
+   Loaded: loaded (/etc/systemd/system/slapd.service; enabled; vendor preset: disabled)
+   Active: active (running) since Sat 2019-12-07 12:10:52 EST; 6s ago
+     Docs: man:slapd
+           man:slapd-mdb
+  Process: 14975 ExecStart=/usr/libexec/slapd -u ldap -g ldap -h ${SLAPD_URLS} $SLAPD_OPTIONS (code=exited, status=0/SUCCESS)
+ Main PID: 14976 (slapd)
+    Tasks: 2 (limit: 5061)
+   Memory: 3.0M
+   CGroup: /system.slice/slapd.service
+           └─14976 /usr/libexec/slapd -u ldap -g ldap -h ldap:/// ldapi:/// ldaps:/// -F /etc/openldap/slapd.d
+           
+           
+           
+ Step 10
+ 
+ Configure OpenLDAP Logging on CentOS 8
+
+To enable OpenLDAP to log connections, operations, results statistics, create and ldif file and update the database as follows. Such OpenLDAP logging is enabled on log level 256 with keyword stats by modifying the olcLogLevel attribute as shown below.
+
+vim enable-ldap-log.ldif
+
+dn: cn=config
+changeType: modify
+replace: olcLogLevel
+olcLogLevel: stats
+
+ldapmodify -Y external -H ldapi:/// -f enable-ldap-log.ldif
+
+ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(objectClass=olcGlobal)" olcLogLevel -LLL -Q
+
+dn: cn=config
+olcLogLevel: stats
+
+Configure Rsyslog to enable OpenLDAP to log to a specific file. By default, OpenLDAP logs to local4 facility.
+
+echo "local4.* /var/log/slapd.log" >> /etc/rsyslog.conf
+
+Restart Rsyslog
+
+systemctl restart rsyslog
+
+You should now be able to read the LDAP logs on, /var/log/slapd.log.
+Create OpenLDAP Default Root DN
+
+Next, create MDB database defining the root DN as well as the access control lists.
+
+First, generate the root DN password.
+
+slappasswd
+
+New password: ENTER PASSWORD
+Re-enter new password: RE-ENTER PASSWORD
+{SSHA}qAZah0xybYLcMfPUAN0SG4ki8JxC4bIF
+
+Paste the password hash generated above as the value of olcRootPW in the Root DN ldif file below.
+
+vim rootdn.ldif
+
+Replace the domain components, dc=ldapmaster,dc=kifarunix-demo,dc=com with your appropriate names.
+
+dn: olcDatabase=mdb,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcMdbConfig
+olcDatabase: mdb
+olcDbMaxSize: 42949672960
+olcDbDirectory: /var/lib/openldap
+olcSuffix: dc=ldapmaster,dc=kifarunix-demo,dc=com
+olcRootDN: cn=admin,dc=ldapmaster,dc=kifarunix-demo,dc=com
+olcRootPW: {SSHA}5Hcgjj4gtcr/exLcdSRuYgH6bFhIqkSe
+olcDbIndex: uid pres,eq
+olcDbIndex: cn,sn pres,eq,approx,sub
+olcDbIndex: mail pres,eq,sub
+olcDbIndex: objectClass pres,eq
+olcDbIndex: loginShell pres,eq
+olcDbIndex: sudoUser,sudoHost pres,eq
+olcAccess: to attrs=userPassword,shadowLastChange,shadowExpire
+  by self write
+  by anonymous auth
+  by dn.subtree="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage 
+  by dn.subtree="ou=system,dc=ldapmaster,dc=kifarunix-demo,dc=com" read
+  by * none
+olcAccess: to dn.subtree="ou=system,dc=ldapmaster,dc=kifarunix-demo,dc=com" by dn.subtree="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage
+  by * none
+olcAccess: to dn.subtree="dc=ldapmaster,dc=kifarunix-demo,dc=com" by dn.subtree="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage
+  by users read 
+  by * none
+
+Read more about ACL on OpenLDAP Access Control.
+
+Updated the slapd database with the content above;
+
+ldapadd -Y EXTERNAL -H ldapi:/// -f rootdn.ldif
+
+Configure OpenLDAP with SSL/TLS
+
+To secure OpenLDAP communication between the client and the server, configured it to use SSL/TLS certificates.
+
+In this guide, we are self-signed certificates. You can choose to obtain the commercially signed and trusted certificates from your preferred CAs, for production environments.
+
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout \
+/etc/pki/tls/ldapserver.key -out /etc/pki/tls/ldapserver.crt
+
+chown ldap:ldap /etc/pki/tls/{ldapserver.crt,ldapserver.key}
+
+Update the OpenLDAP Server TLS certificates attributes.
+
+vi add-tls.ldif
+
+dn: cn=config
+changetype: modify
+add: olcTLSCACertificateFile
+olcTLSCACertificateFile: /etc/pki/tls/ldapserver.crt
+-
+add: olcTLSCertificateKeyFile
+olcTLSCertificateKeyFile: /etc/pki/tls/ldapserver.key
+-
+add: olcTLSCertificateFile
+olcTLSCertificateFile: /etc/pki/tls/ldapserver.crt
+
+Note that we have used self-signed certificate as both the certificate and the CA certificate.
+
+ldapadd -Y EXTERNAL -H ldapi:/// -f add-tls.ldif
+
+You can confirm this by running;
+
+slapcat -b "cn=config" | grep olcTLS
+
+olcTLSCACertificateFile: /etc/pki/tls/ldapserver.crt
+olcTLSCertificateKeyFile: /etc/pki/tls/ldapserver.key
+olcTLSCertificateFile: /etc/pki/tls/ldapserver.crt
+
+Change the location of the CA certificate on /etc/openldap/ldap.conf.
+
+vim /etc/openldap/ldap.conf
+
+...
+#TLS_CACERT     /etc/pki/tls/cert.pem
+TLS_CACERT     /etc/pki/tls/ldapserver.crt
+
+Create OpenLDAP Base DN
+
+Next, create your base DN or search base to define your organization structure and directory.
+
+vim basedn.ldif
+
+Replace the domain components and organization units accordingly.
+
+dn: dc=ldapmaster,dc=kifarunix-demo,dc=com
+objectClass: dcObject
+objectClass: organization
+objectClass: top
+o: Kifarunix-demo
+dc: ldapmaster
+
+dn: ou=groups,dc=ldapmaster,dc=kifarunix-demo,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: groups
+
+dn: ou=people,dc=ldapmaster,dc=kifarunix-demo,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: people
+
+ldapadd -Y EXTERNAL -H ldapi:/// -f basedn.ldif
+
+Create OpenLDAP User Accounts
+
+You can add users to your OpenLDAP server. Create an ldif file to define your users as follows.
+
+vim users.ldif
+
+dn: uid=johndoe,ou=people,dc=ldapmaster,dc=kifarunix-demo,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: johndoe
+cn: John
+sn: Doe
+loginShell: /bin/bash
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/johndoe
+shadowMax: 60
+shadowMin: 1
+shadowWarning: 7
+shadowInactive: 7
+shadowLastChange: 0
+
+dn: cn=johndoe,ou=groups,dc=ldapmaster,dc=kifarunix-demo,dc=com
+objectClass: posixGroup
+cn: johndoe
+gidNumber: 10000
+memberUid: johndoe
+
+Add the user to the OpenLDAP database.
+
+ldapadd -Y EXTERNAL -H ldapi:/// -f users.ldif
+
+Setting password for LDAP User
+
+To set the password for user above, run the command below;
+
+ldappasswd -H ldapi:/// -Y EXTERNAL -S "uid=johndoe,ou=people,dc=ldapmaster,dc=kifarunix-demo,dc=com"
+
+Create OpenLDAP Bind DN and Bind DN User
+
+Bind DN user is used for performing LDAP operations such as resolving User IDs and group IDs. In this guide, we create a bind DN ou called system. Note the access controls associated with this ou as defined on the root DN above.
+
+List the Access control lists on the database;
+
+ldapsearch -Q -LLL -Y EXTERNAL -H ldapi:/// -b cn=config '(olcDatabase={1}mdb)' olcAccess
+
+Create the BindDN user password.
+
+slappasswd
+
+New password: Password
+Re-enter new password: Password
+{SSHA}Z7qPE2f8oRfHMo1DSbzdOqbr4jNgqBpC
+
+Paste the password hash value above as the value of userPassword attribute in the file below;
+
+vim bindDNuser.ldif
+
+dn: ou=system,dc=ldapmaster,dc=kifarunix-demo,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: system
+
+dn: cn=readonly,ou=system,dc=ldapmaster,dc=kifarunix-demo,dc=com
+objectClass: organizationalRole
+objectClass: simpleSecurityObject
+cn: readonly
+userPassword: {SSHA}Z7qPE2f8oRfHMo1DSbzdOqbr4jNgqBpC
+description: Bind DN user for LDAP Operations
+
+ldapadd -Y EXTERNAL -H ldapi:/// -f bindDNuser.ldif
+
+Allow OpenLDAP Service on Firewall
+
+To allow remote clients to query OpenLDAP server, allow the ldap (389 UDP/TCP) and ldaps (636 UDP/TCP) service on firewall.
+
+firewall-cmd --add-service={ldap,ldaps} --permanent
+
+firewall-cmd --reload
+
 
 
 
