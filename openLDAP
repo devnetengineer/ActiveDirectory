@@ -1,0 +1,7 @@
+#What is openLDAP?
+OpenLDAP is a free and open source version of LDAP. 
+Some of the OpenLDAP componenets consist of:
+-slapd
+the ldap daemon 
+-ldapsearch, ldapadd, ldapdelete
+
