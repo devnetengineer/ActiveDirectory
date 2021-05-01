@@ -13,7 +13,7 @@ This repo is a journey in exploring the different Active Directory options. In E
 
 
 
-## openLDAP repository includes 
+## openLDAP 
 -Downloading the tools and dependencies necessary for openLDAP  
 -Downloading openLDAP  
 -installing openLDAP  
