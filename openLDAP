@@ -1,9 +1,53 @@
 
+-Downloading the tools and dependencies necessary for openLDAP
+-Downloading openLDAP
+-installing openLDAP
+-Creating necessary directories and setting permissions
+-Configuring openLDAP to run as part of systemd and running it
+-Configuring Rsyslog logging for openLDAP
+-Creating openLDAP default root DN
+-Configuring SSL/TLS
+-Creating openLDAP base DN
+-Creating openLDAP user accounts
+-Creating openLDAP bind DN and bind DN user
+-Configuring firewall to enable access
+-Additional components
+-FAQs
 
 
 
-##Changing root password##
- 	# ldapsearch -H ldapi:// -LLL -Q -Y EXTERNAL -b "cn=config" "(olcRootDN=*)" dn olcRootDN olcRootPW | tee ./newpasswd.ldif
+
+
+-Downloading the tools and dependencies necessary for openLDAP
+-Downloading openLDAP
+-installing openLDAP
+-Creating necessary directories and setting permissions
+-Configuring openLDAP to run as part of systemd and running it
+-Configuring Rsyslog logging for openLDAP
+-Creating openLDAP default root DN
+-Configuring SSL/TLS
+-Creating openLDAP base DN
+-Creating openLDAP user accounts
+-Creating openLDAP bind DN and bind DN user
+-Configuring firewall to enable access
+-Additional components
+-FAQs
+What are ldif files and why is this important?
+-.ldif files are plain-text LDAP directory contents and update requests that are compatible with the backend LDAP server database. 
+*Any time .ldif files are created/modified, you need to use ldapadd/ldapmodify commands to update the LDAP server
+
+What is base DN?
+A base dn is the point from where a server will search for users.
+Ex) dc=<example>,dc=<com>
+
+What is root DN?
+A root DN consists of the base DN plus the CN
+Ex) cn=<adminuser>,dc=<example>,dc=<com>
+
+I forgot my credentials for root DN and cannot log in. How can I reset/change my password?
+
+1. Find the root dn account and root dn password hash and save it to a file. In this case it will be newpassword.ldif in the /etc/openldap/ directory:
+ 	# ldapsearch -H ldapi:// -LLL -Q -Y EXTERNAL -b "cn=config" "(olcRootDN=*)" dn olcRootDN olcRootPW | tee ./newpassword.ldif
 dn: olcDatabase={0}config,cn=config
 olcRootDN: cn=config
 
@@ -11,7 +55,13 @@ dn: olcDatabase={1}mdb,cn=config
 olcRootDN: cn=admin,dc=ldapmaster,dc=kifarunix-demo,dc=com
 olcRootPW: {SSHA}5Hcgjj4gtcr/exLcdSRuYgH6bFhIqkSe
 
-# cat newpasswd.ldif 
+BaseDN is where the LDAP starts the search
+BindDN is the DN of the user that is permitted (assuming appropriate ACL changes have been made) to authenticate to access the LDAP server for querying/searching
+RootDN is the first, or top-most, entry in an LDAP directory tree (or you can think of it similar to actual roots of a tree/plants). RootDN consists of metadata
+about the LDAP server itself (supported controls, supported auth mechanisms, ACLs).
+
+2. Feel free to check the result of step 1. The command "tee" is writing to a file while still showing the stdout:  
+# cat newpassword.ldif 
 dn: olcDatabase={0}config,cn=config
 olcRootDN: cn=config
 
@@ -19,17 +69,22 @@ dn: olcDatabase={1}mdb,cn=config
 olcRootDN: cn=admin,dc=ldapmaster,dc=kifarunix-demo,dc=com
 olcRootPW: {SSHA}5Hcgjj4gtcr/exLcdSRuYgH6bFhIqkSe
 
+3. Generate a new password for the admin, and append it to the newpassword.ldif. 
 [root@localhost openldap]# slappasswd -h {SSHA} >> newpasswd.ldif
 New password: 
 Re-enter new password: 
+
+4. Edit the newpasswd.ldif, so that it will look like below (just comment olcRootDN, add changetype and replace, and change the oldRootPW to the one we generated in step 3: 
 [root@localhost openldap]# vim newpasswd.ldif 
 
+5. Implement the password change using ldapmodify command, where the flags are -H is for ldap uri, -Y for the SASL mechanism and -f for reading the input from file:  
 ldapmodify -H ldapi:// -Y EXTERNAL -f ./newpasswd.ldif
 SASL/EXTERNAL authentication started
 SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
 SASL SSF: 0
 modifying entry "olcDatabase={1}mdb,cn=config"
 
+6. Test the new password by listing the entries using ldapsearch, making sure that the new password is working:  
 [root@localhost openldap]# ldapsearch -h localhost -b "dc=kifarunix-demo,dc=com" -D "cn=admin,dc=ldapmaster,dc=kifarunix-demo,dc=com" -W
 Enter LDAP Password: 
 # extended LDIF
