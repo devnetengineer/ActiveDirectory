@@ -15,59 +15,21 @@ as important for the system administrators.
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-[openLDAP repository includes](#1)
--Downloading the tools and dependencies necessary for openLDAP
--Downloading openLDAP
--installing openLDAP
--Creating necessary directories and setting permissions
--Configuring openLDAP to run as part of systemd and running it
--Configuring Rsyslog logging for openLDAP
--Creating openLDAP default root DN
--Configuring SSL/TLS
--Creating openLDAP base DN
--Creating openLDAP user accounts
--Creating openLDAP bind DN and bind DN user
--Configuring firewall to enable access
--Additional components
--FAQs 
+[openLDAP repository includes](#1)  
+-Downloading the tools and dependencies necessary for openLDAP  
+-Downloading openLDAP  
+-installing openLDAP  
+-Creating necessary directories and setting permissions  
+-Configuring openLDAP to run as part of systemd and running it  
+-Configuring Rsyslog logging for openLDAP  
+-Creating openLDAP default root DN  
+-Configuring SSL/TLS  
+-Creating openLDAP base DN  
+-Creating openLDAP user accounts  
+-Creating openLDAP bind DN and bind DN user  
+-Configuring firewall to enable access  
+-Additional components  
+-FAQs  
 
 
 
