@@ -1,9 +1,128 @@
 -Downloading the tools and dependencies necessary for openLDAP
+*Due to huge outputs, all the download/compiling stdouts will be either truncated or omitted.
+# yum install -y cyrus-sasl-devel make libtool autoconf libtool-ltdl-devel openssl-devel libdb-devel tar gcc perl perl-devel wget vim
+
 -Downloading openLDAP
--installing openLDAP
+# wget https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-2.4.57.tgz
+
+-Installing openLDAP
+# ls
+anaconda-ks.cfg  initial-setup-ks.cfg  openldap-2.4.57.tgz
+[root@localhost ~]# tar xzf openldap-2.4.57.tgz 
+[root@localhost ~]# ls
+anaconda-ks.cfg  initial-setup-ks.cfg  openldap-2.4.57  openldap-2.4.57.tgz
+[root@localhost ~]# cd openldap-2.4.57/
+[root@localhost openldap-2.4.57]# ls
+aclocal.m4    build    clients    configure.in  COPYRIGHT  include  libraries  Makefile.in  servers
+ANNOUNCEMENT  CHANGES  configure  contrib       doc        INSTALL  LICENSE    README       tests
+[root@localhost openldap-2.4.57]# ./configure --prefix=/usr --sysconfdir=/etc --disable-static \
+> --enable-debug --with-tls=openssl --with-cyrus-sasl --enable-dynamic \
+> --enable-crypt --enable-spasswd --enable-slapd --enable-modules \
+> --enable-rlookups --enable-backends=mod --disable-ndb --disable-sql \
+> --disable-shell --disable-bdb --disable-hdb --enable-overlays=mod
+**truncated**
+Making servers/slapd/backends.c
+    Add config ...
+    Add ldif ...
+Making servers/slapd/overlays/statover.c
+Please run "make depend" to build dependencies
+[root@localhost openldap-2.4.57]# make depend
+[root@localhost openldap-2.4.57]# make
+**truncated**
+done
+make[3]: Leaving directory '/root/openldap-2.4.57/doc/man/man8'
+make[2]: Leaving directory '/root/openldap-2.4.57/doc/man'
+make[1]: Leaving directory '/root/openldap-2.4.57/doc'
+[root@localhost openldap-2.4.57]# make install
+**truncated**
+make[3]: Leaving directory '/root/openldap-2.4.57/doc/man/man8'
+make[2]: Leaving directory '/root/openldap-2.4.57/doc/man'
+make[1]: Leaving directory '/root/openldap-2.4.57/doc'
+[root@localhost openldap-2.4.57]# ls /etc/openldap/
+certs  ldap.conf  ldap.conf.default  schema  slapd.conf  slapd.conf.default  slapd.ldif  slapd.ldif.default
+
 -Creating necessary directories and setting permissions
+[root@localhost openldap-2.4.57]# mkdir /var/lib/openldap /etc/openldap/slapd.d
+[root@localhost openldap-2.4.57]# ll -d /var/lib/openldap /etc/openldap/slapd.d
+drwxr-xr-x. 2 root root 6 May  1 18:03 /etc/openldap/slapd.d
+drwxr-xr-x. 2 root root 6 May  1 18:03 /var/lib/openldap
+[root@localhost openldap-2.4.57]# chown -R ldap:ldap /var/lib/openldap
+[root@localhost openldap-2.4.57]# chown root:ldap /etc/openldap/slapd.conf
+[root@localhost openldap-2.4.57]# chmod 640 /etc/openldap/slapd.conf
+[root@localhost openldap-2.4.57]# ll -d /var/lib/openldap /etc/openldap/slapd.d
+drwxr-xr-x. 2 root root 6 May  1 18:03 /etc/openldap/slapd.d
+drwxr-xr-x. 2 ldap ldap 6 May  1 18:03 /var/lib/openldap
+[root@localhost openldap-2.4.57]# ll /etc/openldap/slapd.conf
+-rw-r-----. 1 root ldap 2078 May  1 18:02 /etc/openldap/slapd.conf
+
 -Configuring openLDAP to run as part of systemd and running it
+[root@localhost openldap-2.4.57]# vim /etc/systemd/system/slapd.service
+[root@localhost openldap-2.4.57]# cat /etc/systemd/system/slapd.service
+[Unit]
+Description=OpenLDAP Server Daemon
+After=syslog.target network-online.target
+Documentation=man:slapd
+Documentation=man:slapd-mdb
+
+[Service]
+Type=forking
+PIDFile=/var/lib/openldap/slapd.pid
+Environment="SLAPD_URLS=ldap:/// ldapi:/// ldaps:///"
+Environment="SLAPD_OPTIONS=-F /etc/openldap/slapd.d"
+ExecStart=/usr/libexec/slapd -u ldap -g ldap -h ${SLAPD_URLS} $SLAPD_OPTIONS
+
+[Install]
+WantedBy=multi-user.target
+
+
+[root@localhost openldap-2.4.57]# systemctl daemon-reload
+[root@localhost openldap-2.4.57]# systemctl enable --now slapd
+Created symlink /etc/systemd/system/multi-user.target.wants/slapd.service → /etc/systemd/system/slapd.service.
+[root@localhost openldap-2.4.57]# systemctl status slapd
+● slapd.service - OpenLDAP Server Daemon
+   Loaded: loaded (/etc/systemd/system/slapd.service; enabled; vendor preset: disabled)
+   Active: active (running) since Sat 2021-05-01 18:09:07 EDT; 4s ago
+     Docs: man:slapd
+           man:slapd-mdb
+  Process: 135899 ExecStart=/usr/libexec/slapd -u ldap -g ldap -h ${SLAPD_URLS} $SLAPD_OPTIONS (code=exited, st>
+ Main PID: 135900 (slapd)
+    Tasks: 2 (limit: 23543)
+   Memory: 3.2M
+   CGroup: /system.slice/slapd.service
+           └─135900 /usr/libexec/slapd -u ldap -g ldap -h ldap:/// ldapi:/// ldaps:/// -F /etc/openldap/slapd.d
+
+May 01 18:09:07 localhost.localdomain systemd[1]: Starting OpenLDAP Server Daemon...
+May 01 18:09:07 localhost.localdomain slapd[135899]: @(#) $OpenLDAP: slapd 2.4.57 (May  1 2021 18:01:13) $
+                                                             root@localhost.localdomain:/root/openldap-2.4.57/s>
+May 01 18:09:07 localhost.localdomain slapd[135900]: slapd starting
+May 01 18:09:07 localhost.localdomain systemd[1]: Started OpenLDAP Server Daemon.
+lines 1-17/17 (END)
+
 -Configuring Rsyslog logging for openLDAP
+[root@localhost openldap]# ls /var/log/
+anaconda  chrony           dnf.log      glusterfs   maillog   rhsm               spooler  wtmp
+audit     cron             dnf.rpm.log  hawkey.log  messages  samba              sssd     Xorg.9.log
+boot.log  cups             firewalld    lastlog     private   secure             swtpm
+btmp      dnf.librepo.log  gdm          libvirt     qemu-ga   speech-dispatcher  tuned
+[root@localhost openldap]# vim enable-ldap-log.ldif
+[root@localhost openldap]# cat enable-ldap-log.ldif
+dn: cn=config
+changeType: modify
+replace: olcLogLevel
+olcLogLevel: stats
+[root@localhost openldap]# ldapmodify -Y external -H ldapi:/// -f enable-ldap-log.ldif
+SASL/EXTERNAL authentication started
+SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
+SASL SSF: 0
+modifying entry "cn=config"
+
+[root@localhost openldap]# ldapsearch -Y EXTERNAL -H ldapi:/// -b cn=config "(objectClass=olcGlobal)" olcLogLevel -LLL -Q
+dn: cn=config
+olcLogLevel: stats
+[root@localhost openldap]# echo "local4.* /var/log/slapd.log" >> /etc/rsyslog.conf
+[root@localhost openldap]# systemctl restart rsyslog
+*/var/log/slapd.log may not appear yet since no system logging has been done for this daemon yet
+
 -Creating openLDAP default root DN
 -Configuring SSL/TLS
 
