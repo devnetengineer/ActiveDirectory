@@ -8,20 +8,20 @@
 -Configuring SSL/TLS
 
 Before continuing, here are the domain and user account information that will be used to configured in this ldap server:
-olcRootDN: cn=admin,dc=sf,dc=yotighty,dc=com
+olcRootDN: cn=admin,dc=yotighty,dc=com
 
-base dn= dc=sf,dc=yotighty,dc=com
+base dn= dc=yotighty,dc=com
 o: yotighty
-dc: sf
+dc: yotighty
 
 For ou=people
 cn=jason
 sn=yoo
-dn: uid=jasonyoo,ou=people,dc=sf,dc=yotighty,dc=com
+dn: uid=jasonyoo,ou=people,dc=yotighty,dc=com
 
 For ou=group
 cn=jasonyoo
-dn: cn=jasonyoo,ou=groups,dc=sf,dc=yotighty,dc=com
+dn: cn=jasonyoo,ou=groups,dc=yotighty,dc=com
 
 
 -Creating openLDAP base DN
