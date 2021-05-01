@@ -12,7 +12,7 @@
 -Creating openLDAP bind DN and bind DN user
 -Configuring firewall to enable access
 -Additional components
--FAQs
+[FAQs](#14)
 
 
 
@@ -31,7 +31,7 @@
 -Creating openLDAP bind DN and bind DN user
 -Configuring firewall to enable access
 -Additional components
--FAQs
+-FAQs {#14}
 What are ldif files and why is this important?
 -.ldif files are plain-text LDAP directory contents and update requests that are compatible with the backend LDAP server database. 
 *Any time .ldif files are created/modified, you need to use ldapadd/ldapmodify commands to update the LDAP server
