@@ -11,7 +11,7 @@ as important for the system administrators.
 
 
 
-openLDAP repository includes {#1}
+[openLDAP repository includes](#1)
 -Downloading the tools and dependencies necessary for openLDAP
 -Downloading openLDAP
 -installing openLDAP
