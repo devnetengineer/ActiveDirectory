@@ -124,8 +124,95 @@ olcLogLevel: stats
 */var/log/slapd.log may not appear yet since no system logging has been done for this daemon yet
 
 -Creating openLDAP default root DN
--Configuring SSL/TLS
+'dietcoke' == password
+[root@localhost openldap]# slappasswd
+New password: 
+Re-enter new password: 
+{SSHA}05uZ1RYJoF3PYV4xxFQ3Y9d3i5LTPK5a
+[root@localhost openldap]# vim rootdn.ldif
+dn: olcDatabase=mdb,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcMdbConfig
+olcDatabase: mdb
+olcDbMaxSize: 42949672960
+olcDbDirectory: /var/lib/openldap
+olcSuffix: dc=yotighty,dc=com
+olcRootDN: cn=admin,dc=yotighty,dc=com
+olcRootPW: {SSHA}05uZ1RYJoF3PYV4xxFQ3Y9d3i5LTPK5a
+olcDbIndex: uid pres,eq
+olcDbIndex: cn,sn pres,eq,approx,sub
+olcDbIndex: mail pres,eq,sub
+olcDbIndex: objectClass pres,eq
+olcDbIndex: loginShell pres,eq
+olcDbIndex: sudoUser,sudoHost pres,eq
+olcAccess: to attrs=userPassword,shadowLastChange,shadowExpire
+  by self write
+  by anonymous auth
+  by dn.subtree="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage 
+  by dn.subtree="ou=system,dc=yotighty,dc=com" read
+  by * none
+olcAccess: to dn.subtree="ou=system,dc=yotighty,dc=com" by dn.subtree="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage
+  by * none
+olcAccess: to dn.subtree="dc=yotighty,dc=com" by dn.subtree="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage
+  by users read 
+  by * none            
+[root@localhost openldap]# ldapadd -Y EXTERNAL -H ldapi:/// -f rootdn.ldif
+SASL/EXTERNAL authentication started
+SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
+SASL SSF: 0
+adding new entry "olcDatabase=mdb,cn=config"
 
+-Configuring SSL/TLS
+[root@localhost openldap]# openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout \
+> /etc/pki/tls/ldapserver.key -out /etc/pki/tls/ldapserver.crt
+Generating a RSA private key
+...................+++++
+.......................................+++++
+writing new private key to '/etc/pki/tls/ldapserver.key'
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Country Name (2 letter code) [XX]:US
+State or Province Name (full name) []:Georgia
+Locality Name (eg, city) [Default City]:Lawrenceville
+Organization Name (eg, company) [Default Company Ltd]:yotighty
+Organizational Unit Name (eg, section) []:it
+Common Name (eg, your name or your server's hostname) []:jason
+Email Address []:jason@yotighty.com
+[root@localhost openldap]# chown ldap:ldap /etc/pki/tls/{ldapserver.crt,ldapserver.key}
+[root@localhost openldap]# vi add-tls.ldif
+[root@localhost openldap]# cat add-tls.ldif
+dn: cn=config
+changetype: modify
+add: olcTLSCACertificateFile
+olcTLSCACertificateFile: /etc/pki/tls/ldapserver.crt
+-
+add: olcTLSCertificateKeyFile
+olcTLSCertificateKeyFile: /etc/pki/tls/ldapserver.key
+-
+add: olcTLSCertificateFile
+olcTLSCertificateFile: /etc/pki/tls/ldapserver.crt
+[root@localhost openldap]# ldapadd -Y EXTERNAL -H ldapi:/// -f add-tls.ldif
+SASL/EXTERNAL authentication started
+SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
+SASL SSF: 0
+modifying entry "cn=config"
+
+[root@localhost openldap]# slapcat -b "cn=config" | grep olcTLS
+olcTLSCACertificateFile: /etc/pki/tls/ldapserver.crt
+olcTLSCertificateKeyFile: /etc/pki/tls/ldapserver.key
+olcTLSCertificateFile: /etc/pki/tls/ldapserver.crt
+[root@localhost openldap]# grep 'ldap' /etc/openldap/ldap.conf
+# See ldap.conf(5) for details
+#URI	ldap://ldap.example.com ldap://ldap-master.example.com:666
+TLS_CACERT     /etc/pki/tls/ldapserver.crt
+
+*****
 Before continuing, here are the domain and user account information that will be used to configured in this ldap server:
 olcRootDN: cn=admin,dc=yotighty,dc=com
 
@@ -141,14 +228,155 @@ dn: uid=jasonyoo,ou=people,dc=yotighty,dc=com
 For ou=group
 cn=jasonyoo
 dn: cn=jasonyoo,ou=groups,dc=yotighty,dc=com
-
+*****
 
 -Creating openLDAP base DN
+[root@localhost openldap]# vim basedn.ldif
+[root@localhost openldap]# cat basedn.ldif
+dn: dc=yotighty,dc=com
+objectClass: dcObject
+objectClass: organization
+objectClass: top
+o: Yotighty
+dc: yotighty
+
+dn: ou=groups,dc=yotighty,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: groups
+
+dn: ou=people,dc=yotighty,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: people
+[root@localhost openldap]# ldapadd -Y EXTERNAL -H ldapi:/// -f basedn.ldif
+SASL/EXTERNAL authentication started
+SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
+SASL SSF: 0
+adding new entry "dc=yotighty,dc=com"
+
+adding new entry "ou=groups,dc=yotighty,dc=com"
+
+adding new entry "ou=people,dc=yotighty,dc=com"
+
 -Creating openLDAP user accounts
+[root@localhost openldap]# vim users.ldif
+[root@localhost openldap]# cat users.ldif
+dn: uid=jasonyoo,ou=people,dc=yotighty,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: jasonyooo
+cn: Jason
+sn: Yoo
+loginShell: /bin/bash
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/jasonyoo
+shadowMax: 60
+shadowMin: 1
+shadowWarning: 7
+shadowInactive: 7
+shadowLastChange: 0
+
+dn: cn=jasonyoo,ou=groups,dc=yotighty,dc=com
+objectClass: posixGroup
+cn: jasonyoo
+gidNumber: 10000
+memberUid: jasonyoo
+[root@localhost openldap]# ldapadd -Y EXTERNAL -H ldapi:/// -f users.ldif
+SASL/EXTERNAL authentication started
+SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
+SASL SSF: 0
+adding new entry "uid=jasonyoo,ou=people,dc=yotighty,dc=com"
+
+adding new entry "cn=jasonyoo,ou=groups,dc=yotighty,dc=com"
+
+[root@localhost openldap]# 
+'dietsprite' == password (for Jason)
+
+[root@localhost openldap]# ldappasswd -H ldapi:/// -Y EXTERNAL -S "uid=jasonyoo,ou=people,dc=yotighty,dc=com"
+New password: 
+Re-enter new password: 
+SASL/EXTERNAL authentication started
+SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
+SASL SSF: 0
+
 -Creating openLDAP bind DN and bind DN user
+We will check the ACLs currently configured first (should have been configured with Root DN):
+
+[root@localhost openldap]# ldapsearch -Q -LLL -Y EXTERNAL -H ldapi:/// -b cn=config '(olcDatabase={1}mdb)' olcAccess
+dn: olcDatabase={1}mdb,cn=config
+olcAccess: {0}to attrs=userPassword,shadowLastChange,shadowExpire by self writ
+ e by anonymous auth by dn.subtree="gidNumber=0+uidNumber=0,cn=peercred,cn=ext
+ ernal,cn=auth" manage  by dn.subtree="ou=system,dc=yotighty,dc=com" read by *
+  none
+olcAccess: {1}to dn.subtree="ou=system,dc=yotighty,dc=com" by dn.subtree="gidN
+ umber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage by * none
+olcAccess: {2}to dn.subtree="dc=yotighty,dc=com" by dn.subtree="gidNumber=0+ui
+ dNumber=0,cn=peercred,cn=external,cn=auth" manage by users read  by * none
+
+'dietpepsi' == password
+[root@localhost openldap]# slappasswd
+New password: 
+Re-enter new password: 
+{SSHA}q6jx/LkD0mECF8YFu/NWnZUBSkbacZo1
+
+[root@localhost openldap]# vim bindDNuser.ldif
+[root@localhost openldap]# cat bindDNuser.ldif
+dn: ou=system,dc=yotighty,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: system
+
+dn: cn=readonly,ou=system,dc=yotighty,dc=com
+objectClass: organizationalRole
+objectClass: simpleSecurityObject
+cn: readonly
+userPassword: {SSHA}q6jx/LkD0mECF8YFu/NWnZUBSkbacZo1
+description: Bind DN user for LDAP Operations
+[root@localhost openldap]# ldapadd -Y EXTERNAL -H ldapi:/// -f bindDNuser.ldif
+SASL/EXTERNAL authentication started
+SASL username: gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth
+SASL SSF: 0
+adding new entry "ou=system,dc=yotighty,dc=com"
+
+adding new entry "cn=readonly,ou=system,dc=yotighty,dc=com"
+
 -Configuring firewall to enable access
+[root@localhost openldap]# firewall-cmd --add-service={ldap,ldaps} --permanent
+success
+[root@localhost openldap]# firewall-cmd --reload
+success
+
 -Additional components
--FAQs {#14}
+If your openLDAP supports SUDO scheme and if your sudo supports LDAP, you can configure so SUDO can work with LDAP:
+
+# sudo -V |  grep -i "ldap"
+# rpm -ql sudo |  grep -i schema.openldap
+# cp /usr/share/doc/sudo/schema.OpenLDAP  /etc/openldap/schema/sudo.schema
+# cat << 'EOL' > /etc/openldap/schema/sudo.ldif
+dn: cn=sudo,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: sudo
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.1 NAME 'sudoUser' DESC 'User(s) who may  run sudo' EQUALITY caseExactIA5Match SUBSTR caseExactIA5SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.2 NAME 'sudoHost' DESC 'Host(s) who may run sudo' EQUALITY caseExactIA5Match SUBSTR caseExactIA5SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.3 NAME 'sudoCommand' DESC 'Command(s) to be executed by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.4 NAME 'sudoRunAs' DESC 'User(s) impersonated by sudo (deprecated)' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.5 NAME 'sudoOption' DESC 'Options(s) followed by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.6 NAME 'sudoRunAsUser' DESC 'User(s) impersonated by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcAttributeTypes: ( 1.3.6.1.4.1.15953.9.1.7 NAME 'sudoRunAsGroup' DESC 'Group(s) impersonated by sudo' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+olcObjectClasses: ( 1.3.6.1.4.1.15953.9.2.1 NAME 'sudoRole' SUP top STRUCTURAL DESC 'Sudoer Entries' MUST ( cn ) MAY ( sudoUser $ sudoHost $ sudoCommand $ sudoRunAs $ sudoRunAsUser $ sudoRunAsGroup $ sudoOption $ description ) )
+EOL
+
+# mv /etc/openldap/slapd.ldif /etc/openldap/slapd.ldif.bak
+# vi /etc/openldap/slapd.ldif
+# slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif -u
+# slapadd -n 0 -F /etc/openldap/slapd.d -l /etc/openldap/slapd.ldif
+# ls /etc/openldap/slapd.d
+# chown -R ldap:ldap /etc/openldap/slapd.d
+
+-FAQs 
 What are ldif files and why is this important?
 -.ldif files are plain-text LDAP directory contents and update requests that are compatible with the backend LDAP server database. 
 *Any time .ldif files are created/modified, you need to use ldapadd/ldapmodify commands to update the LDAP server
